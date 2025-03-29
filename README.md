@@ -4,5 +4,6 @@
 - cp .env.example .env
 - npm install
 - npm run dev
+- Chạy mongodb compass để check database
 
 # Commit code tại nhánh của mình
