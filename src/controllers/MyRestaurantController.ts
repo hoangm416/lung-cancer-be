@@ -27,9 +27,13 @@ const createMyRestaurant = async (req: Request, res: Response) => {
       return;
     }
 
-    const imageUrl = await uploadImage(req.file as Express.Multer.File);
+    let fileUrl = "";
+    if (req.file) {
+      fileUrl = await uploadFile(req.file as Express.Multer.File); // Upload file
+    }
+
     const restaurant = new Restaurant(req.body);
-    restaurant.imageUrl = imageUrl;
+    restaurant.fileUrl = fileUrl; // Lưu URL file vào DB
     restaurant.user = new mongoose.Types.ObjectId(req.userId);
     restaurant.lastUpdated = new Date();
     await restaurant.save();
@@ -62,8 +66,8 @@ const updateMyRestaurant = async (req: Request, res: Response) => {
     restaurant.lastUpdated = new Date();
 
     if (req.file) {
-      const imageUrl = await uploadImage(req.file as Express.Multer.File);
-      restaurant.imageUrl = imageUrl;
+      const fileUrl = await uploadFile(req.file as Express.Multer.File); // Upload file
+      restaurant.fileUrl = fileUrl; // Cập nhật URL file
     }
 
     await restaurant.save();
@@ -120,13 +124,15 @@ const updateOrderStatus = async (req: Request, res: Response) => {
   }
 };
 
-const uploadImage = async (file: Express.Multer.File) => {
-  const image = file;
-  const base64Image = Buffer.from(image.buffer).toString("base64");
-  const dataURI = `data:${image.mimetype};base64,${base64Image}`;
+const uploadFile = async (file: Express.Multer.File) => {
+  const base64File = Buffer.from(file.buffer).toString("base64");
+  const dataURI = `data:${file.mimetype};base64,${base64File}`;
 
-  const uploadResponse = await cloudinary.v2.uploader.upload(dataURI);
-  return uploadResponse.url;
+  const uploadResponse = await cloudinary.v2.uploader.upload(dataURI, {
+    resource_type: "raw", // Sử dụng "raw" để upload file không phải ảnh
+  });
+
+  return uploadResponse.url; // Trả về URL của file đã upload
 };
 
 export default {
