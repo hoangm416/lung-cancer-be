@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "main": "./src/index.ts",
   "scripts": {
+    "dev": "nodemon",
+    "build": "npm install && npx tsc",
+    "start": "node dist/index.js",
     "scrape": "node src/utils/scraper.js"
   },
   "keywords": [],
