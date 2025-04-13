@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import Record from "../models/record";
+import mongoose from "mongoose";
 
 // Lấy danh sách Record
 const getRecord = async (req: Request, res: Response) => {
@@ -107,13 +108,13 @@ const addRecord = async (req: Request, res: Response) => {
   }
 };
 
-// Sửa Record
 const editRecord = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id: case_submitter_id } = req.params; // Lấy case_id từ params
     const updateData = req.body;
 
-    const record = await Record.findByIdAndUpdate(id, updateData, { new: true });
+    // Tìm và cập nhật Record dựa trên case_id
+    const record = await Record.findOneAndUpdate({ case_submitter_id }, updateData, { new: true });
     if (!record) {
       res.status(404).json({ message: "Không tìm thấy Record" });
       return;
@@ -129,9 +130,10 @@ const editRecord = async (req: Request, res: Response) => {
 // Xóa Record
 const removeRecord = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id: case_submitter_id } = req.params; // Lấy case_id từ params
 
-    const record = await Record.findByIdAndDelete(id);
+    // Tìm và xóa Record dựa trên case_id
+    const record = await Record.findOneAndDelete({ case_submitter_id });
     if (!record) {
       res.status(404).json({ message: "Không tìm thấy Record để xóa" });
       return;
