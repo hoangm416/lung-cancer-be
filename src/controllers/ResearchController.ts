@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import Research from "../models/research";
+import slugify from "slugify";
 
 const getResearchById = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -38,11 +39,25 @@ const createResearch = async (req: Request, res: Response): Promise<void> => {
 
 const updateResearch = async (req: Request, res: Response): Promise<void> => {
     try {
-        const updatedResearch = await Research.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        const { title, ...rest } = req.body;
+
+        const updateData: any = {
+            ...rest,
+        };
+
+        // Nếu có trường 'title' thì cập nhật 'slug'
+        if (title) {
+            updateData.title = title;
+            updateData.slug = slugify(title, { lower: true, strict: true });
+        }
+
+        const updatedResearch = await Research.findByIdAndUpdate(req.params.id, updateData, { new: true });
+
         if (!updatedResearch) {
             res.status(404).json({ message: "Nghiên cứu không tồn tại" });
             return;
         }
+
         res.json(updatedResearch);
     } catch (error) {
         console.error(error);
