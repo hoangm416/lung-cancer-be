@@ -8,7 +8,8 @@ import myRestaurantRoute from "./routes/MyRestaurantRoute";
 import restaurantRoute from "./routes/RestaurantRoutes";
 import orderRoute from "./routes/OrderRoute";
 import recordRoute from "./routes/RecordRoute";
-import lungRoute from "./routes/LungFileRoute"
+import researchRoute from "./routes/ResearchRoute";
+import fileRoute from "./routes/LungFileRoute"
 
 mongoose
   .connect(process.env.MONGODB_CONNECTION_STRING as string)
@@ -37,7 +38,8 @@ app.use("/api/my/restaurant", myRestaurantRoute);
 app.use("/api/restaurant",restaurantRoute);
 app.use("/api/order", orderRoute);
 app.use("/api/record", recordRoute);
-app.use("/api/record/file", lungRoute);
+app.use("/api/research", researchRoute);
+app.use("/api/multiomics", fileRoute);
 
 app.listen(5000, () => {
   console.log("Server is starting on port 5000");

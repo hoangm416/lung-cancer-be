@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const MONGO_URI: string = process.env.MONGODB_CONNECTION_STRING ?? "";
-const vietnamnetURL = 'https://vietnamnet.vn/suc-khoe/ung-thu-phoi-DS40001UR.html';
+const vietnamnetURL = 'https://timkiem.vnexpress.net/?q=Ung+th%C6%B0+ph%E1%BB%95i';
 const googleScholarURL = 'https://scholar.google.com/scholar?as_vis=0&q=b%E1%BB%87nh++%22ung+th%C6%B0+ph%E1%BB%95i%22&hl=vi&scisbd=1&as_sdt=0,5';
 
 // Kết nối MongoDB
