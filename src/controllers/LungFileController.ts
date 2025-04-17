@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import Lung from "../models/lung";
+import MultiOmics from "../models/multiomics";
 import cloudinary from "cloudinary";
 
 // Configure Cloudinary
@@ -9,51 +9,78 @@ cloudinary.v2.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// Thêm file lên Cloudinary và lưu thông tin vào DB
-export const uploadLungFile = async (req: Request, res: Response): Promise<void> => {
+// Lấy danh sách file liên quan đến một record
+export const getFilesForRecord = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { case_submitter_id, fileType } = req.body;
+    const { case_submitter_id } = req.params;
+
+    if (!case_submitter_id) {
+      res.status(400).json({ message: "Thiếu case_submitter_id" });
+      return;
+    }
+
+    const multiOmicsRecord = await MultiOmics.findOne({ case_submitter_id });
+    if (!multiOmicsRecord) {
+      res.status(404).json({ message: "Không tìm thấy hồ sơ MultiOmics" });
+      return;
+    }
+
+    res.status(200).json({ files: multiOmicsRecord.files });
+  } catch (error) {
+    console.error("Error fetching files:", error);
+    res.status(500).json({ message: "Lỗi khi lấy danh sách file" });
+  }
+};
+
+// Upload file lên Cloudinary và lưu thông tin vào DB
+export const uploadFile = async (req: Request, res: Response): Promise<void> => {
+  try {
+    console.log("File received:", req.file);
+    console.log("Body received:", req.body);
+
+    const { case_submitter_id, fileType, fileName } = req.body;
 
     if (!req.file || !case_submitter_id || !fileType) {
       res.status(400).json({ message: "Thiếu thông tin cần thiết" });
       return;
     }
 
-    // Xác định kiểu của fileType
     const validFileTypes = ["cnv", "dna_methylation", "miRNA", "gene_expression"] as const;
     if (!validFileTypes.includes(fileType)) {
       res.status(400).json({ message: "Loại file không hợp lệ" });
       return;
     }
 
-    const file = req.file;
-    const uploadResponse = await cloudinary.v2.uploader.upload(file.path, {
-      resource_type: "raw", // Hỗ trợ upload file không phải ảnh
+    // Upload file từ buffer
+    const uploadResponse = await new Promise((resolve, reject) => {
+      const stream = cloudinary.v2.uploader.upload_stream(
+        { resource_type: "raw" },
+        (error, result) => {
+          if (error) return reject(error);
+          resolve(result);
+        }
+      );
+      stream.end(req.file?.buffer); // Gửi buffer tới Cloudinary
     });
 
-    const lungRecord = await Lung.findOne({ case_submitter_id });
-    if (!lungRecord) {
-      res.status(404).json({ message: "Không tìm thấy hồ sơ phổi" });
+    const multiOmicsRecord = await MultiOmics.findOne({ case_submitter_id });
+    if (!multiOmicsRecord) {
+      res.status(404).json({ message: "Không tìm thấy hồ sơ MultiOmics" });
       return;
     }
 
-    // Đảm bảo lungRecord.files tồn tại
-    if (!lungRecord.files) {
-      lungRecord.files = {
-        cnv: "",
-        dna_methylation: "",
-        miRNA: "",
-        gene_expression: "",
-      };
-    }
+    // Thêm file mới vào danh sách files
+    multiOmicsRecord.files.push({
+      file_type: fileType,
+      file_url: (uploadResponse as any).secure_url,
+      file_name: fileName || req.file.originalname,
+    });
 
-    // Gán giá trị cho trường tương ứng
-    lungRecord.files[fileType as keyof typeof lungRecord.files] = uploadResponse.secure_url;
-    await lungRecord.save();
+    await multiOmicsRecord.save();
 
     res.status(200).json({
       message: "File uploaded successfully",
-      fileUrl: uploadResponse.secure_url,
+      file: multiOmicsRecord.files[multiOmicsRecord.files.length - 1],
     });
   } catch (error) {
     console.error("Error uploading file:", error);
@@ -61,101 +88,38 @@ export const uploadLungFile = async (req: Request, res: Response): Promise<void>
   }
 };
 
-// Tải xuống file từ Cloudinary
-export const downloadLungFile = async (req: Request, res: Response): Promise<void> => {
+// Xóa file trên Cloudinary và DB
+export const deleteFile = async (req: Request, res: Response): Promise<void> => {
   try {
     const { case_submitter_id, fileType } = req.params;
 
-    const validFileTypes = ["cnv", "dna_methylation", "miRNA", "gene_expression"] as const;
-    if (!validFileTypes.includes(fileType as typeof validFileTypes[number])) {
-      res.status(400).json({ message: "Loại file không hợp lệ" });
-      return;
-    }
-
-    const lungRecord = await Lung.findOne({ case_submitter_id });
-    if (!lungRecord || !lungRecord.files || !lungRecord.files[fileType as keyof typeof lungRecord.files]) {
-      res.status(404).json({ message: "Không tìm thấy file" });
-      return;
-    }
-
-    res.status(200).json({ fileUrl: lungRecord.files[fileType as keyof typeof lungRecord.files] });
-  } catch (error) {
-    console.error("Error downloading file:", error);
-    res.status(500).json({ message: "Lỗi khi tải file" });
-  }
-};
-
-// Sửa file trên Cloudinary
-export const updateLungFile = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { case_submitter_id, fileType } = req.body;
-
-    if (!req.file || !case_submitter_id || !fileType) {
+    if (!case_submitter_id || !fileType) {
       res.status(400).json({ message: "Thiếu thông tin cần thiết" });
       return;
     }
 
-    const validFileTypes = ["cnv", "dna_methylation", "miRNA", "gene_expression"] as const;
-    if (!validFileTypes.includes(fileType)) {
-      res.status(400).json({ message: "Loại file không hợp lệ" });
+    const multiOmicsRecord = await MultiOmics.findOne({ case_submitter_id });
+    if (!multiOmicsRecord) {
+      res.status(404).json({ message: "Không tìm thấy hồ sơ MultiOmics" });
       return;
     }
 
-    const lungRecord = await Lung.findOne({ case_submitter_id });
-    if (!lungRecord || !lungRecord.files || !lungRecord.files[fileType as keyof typeof lungRecord.files]) {
-      res.status(404).json({ message: "Không tìm thấy file để sửa" });
-      return;
-    }
-
-    const oldFileUrl = lungRecord.files[fileType as keyof typeof lungRecord.files];
-    const publicId = oldFileUrl.split("/").pop()?.split(".")[0];
-    if (publicId) {
-      await cloudinary.v2.uploader.destroy(publicId, { resource_type: "raw" });
-    }
-
-    const file = req.file;
-    const uploadResponse = await cloudinary.v2.uploader.upload(file.path, {
-      resource_type: "raw",
-    });
-
-    lungRecord.files[fileType as keyof typeof lungRecord.files] = uploadResponse.secure_url;
-    await lungRecord.save();
-
-    res.status(200).json({
-      message: "File updated successfully",
-      fileUrl: uploadResponse.secure_url,
-    });
-  } catch (error) {
-    console.error("Error updating file:", error);
-    res.status(500).json({ message: "Lỗi khi sửa file" });
-  }
-};
-
-// Xóa file trên Cloudinary và DB
-export const deleteLungFile = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { case_submitter_id, fileType } = req.params;
-
-    const validFileTypes = ["cnv", "dna_methylation", "miRNA", "gene_expression"] as const;
-    if (!validFileTypes.includes(fileType as typeof validFileTypes[number])) {
-      res.status(400).json({ message: "Loại file không hợp lệ" });
-      return;
-    }
-
-    const lungRecord = await Lung.findOne({ case_submitter_id });
-    if (!lungRecord || !lungRecord.files || !lungRecord.files[fileType as keyof typeof lungRecord.files]) {
+    const fileIndex = multiOmicsRecord.files.findIndex((f) => f.file_type === fileType);
+    if (fileIndex === -1) {
       res.status(404).json({ message: "Không tìm thấy file để xóa" });
       return;
     }
 
-    const fileUrl = lungRecord.files[fileType as keyof typeof lungRecord.files];
+    // Xóa file trên Cloudinary
+    const fileUrl = multiOmicsRecord.files[fileIndex].file_url;
     const publicId = fileUrl.split("/").pop()?.split(".")[0];
     if (publicId) {
       await cloudinary.v2.uploader.destroy(publicId, { resource_type: "raw" });
     }
 
-    lungRecord.files[fileType as keyof typeof lungRecord.files] = "";
-    await lungRecord.save();
+    // Xóa file khỏi DB
+    multiOmicsRecord.files.splice(fileIndex, 1);
+    await multiOmicsRecord.save();
 
     res.status(200).json({ message: "File deleted successfully" });
   } catch (error) {
@@ -164,9 +128,46 @@ export const deleteLungFile = async (req: Request, res: Response): Promise<void>
   }
 };
 
+// Đổi tên file trong DB
+export const renameFile = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { case_submitter_id, fileType, newFileName } = req.body;
+
+    if (!case_submitter_id || !fileType || !newFileName) {
+      res.status(400).json({ message: "Thiếu thông tin cần thiết" });
+      return;
+    }
+
+    const multiOmicsRecord = await MultiOmics.findOne({ case_submitter_id });
+    if (!multiOmicsRecord) {
+      res.status(404).json({ message: "Không tìm thấy hồ sơ MultiOmics" });
+      return;
+    }
+
+    const fileIndex = multiOmicsRecord.files.findIndex((f) => f.file_type === fileType);
+    if (fileIndex === -1) {
+      res.status(404).json({ message: "Không tìm thấy file để đổi tên" });
+      return;
+    }
+
+    // Đổi tên file
+    multiOmicsRecord.files[fileIndex].file_name = newFileName;
+
+    await multiOmicsRecord.save();
+
+    res.status(200).json({
+      message: "File renamed successfully",
+      file: multiOmicsRecord.files[fileIndex],
+    });
+  } catch (error) {
+    console.error("Error renaming file:", error);
+    res.status(500).json({ message: "Lỗi khi đổi tên file" });
+  }
+};
+
 export default {
-  uploadLungFile,
-  downloadLungFile,
-  updateLungFile,
-  deleteLungFile,
+  getFilesForRecord,
+  uploadFile,
+  deleteFile,
+  renameFile,
 };

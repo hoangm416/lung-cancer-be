@@ -1,18 +1,25 @@
 import express from "express";
 import multer from "multer";
 import {
-  uploadLungFile,
-  downloadLungFile,
-  updateLungFile,
-  deleteLungFile,
+  getFilesForRecord,
+  uploadFile,
+  deleteFile,
+  renameFile,
 } from "../controllers/LungFileController";
 
 const router = express.Router();
-const upload = multer({ dest: "uploads/" }); // Lưu file tạm thời
+const upload = multer({ storage: multer.memoryStorage() }); // Sử dụng memory storage để xử lý file trực tiếp
 
-router.post("/upload", upload.single("file"), uploadLungFile);
-router.get("/download/:case_submitter_id/:fileType", downloadLungFile);
-router.put("/update", upload.single("file"), updateLungFile);
-router.delete("/delete/:case_submitter_id/:fileType", deleteLungFile);
+// Route để lấy danh sách file liên quan đến một record
+router.get("/:case_submitter_id/files", getFilesForRecord);
+
+// Route để upload file lên Cloudinary và lưu thông tin vào DB
+router.post("/upload", upload.single("file"), uploadFile);
+
+// Route để đổi tên file trong DB
+router.patch("/rename", renameFile);
+
+// Route để xóa file khỏi Cloudinary và DB
+router.delete("/delete/:case_submitter_id/:fileType", deleteFile);
 
 export default router;
